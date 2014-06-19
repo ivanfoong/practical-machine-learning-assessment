@@ -1,0 +1,92 @@
+---
+title: "Building Human Activity Recognition Model"
+author: "Ivan Foong"
+date: "19 June, 2014"
+output: html_document
+---
+
+This document describe the process to explore and building a Human Activity Recognition Model based on the dataset available at <http://groupware.les.inf.puc-rio.br/har>, for my assignment on Practical Machine Learning course on Coursera.
+
+Enable multicore processing to speed up training process
+
+```{r,echo=FALSE}
+# register multiple computational cores
+library(doMC)
+registerDoMC(cores = 7)
+```
+
+Download the csv data from the internet
+
+```{r}
+download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv','pml-training.csv','curl')
+download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv','pml-testing.csv','curl')
+```
+
+Read in the data
+
+```{r}
+trainingDat <- read.csv('pml-training.csv')
+testingDat <- read.csv('pml-testing.csv')
+```
+
+Exploring the data via scatter plots (Showing first four features as sample)
+
+```{r, echo=FALSE}
+require(gridExtra)
+require(ggplot2)
+plot1 <- ggplot(trainingDat, aes(x=classe, y=roll_belt, color=classe)) + geom_point(shape=1)
+plot2 <- ggplot(trainingDat, aes(x=classe, y=pitch_belt, color=classe)) + geom_point(shape=1)
+plot3 <- ggplot(trainingDat, aes(x=classe, y=yaw_belt, color=classe)) + geom_point(shape=1)
+plot4 <- ggplot(trainingDat, aes(x=classe, y=total_accel_belt, color=classe)) + geom_point(shape=1)
+grid.arrange(plot1,plot2,plot3,plot4)
+```
+
+
+Exploring the data further and found that the data has alot of NA
+
+```{r, echo=FALSE}
+#Number of valid values
+is_not_na_sum <- sum(!is.na(trainingDat))
+
+#Number of NA values
+is_na_sum <- sum(is.na(trainingDat))
+
+barplot(c(is_not_na_sum, is_na_sum), names.arg=c("Valid", "NA"), main="Valid vs NA values count for testing data")
+```
+
+
+Drop columns with NA values based on first testing set record, to speed up the training process
+
+```{r}
+usableVars <- !is.na(testingDat[1,])
+trainingDat <- trainingDat[, usableVars]
+testingDat <- testingDat[, usableVars]
+```
+
+
+Training a random forest model using training data, with 10 fold, 10 repeat, "out of bag" cross validation
+
+```{r}
+library(caret)
+fitControl <- trainControl(method = "oob", number = 10, repeats = 10)
+set.seed(1337)
+fit <- train(classe ~ . - X - user_name - raw_timestamp_part_1 - raw_timestamp_part_2 - cvtd_timestamp - new_window - num_window, data = trainingDat, method = "rf", trControl = fitControl, verbose = FALSE)
+fit
+```
+
+
+Check error rate of the trained model against training data, which has 0 error for this trained random forest model
+
+```{r}
+trainingDat.pred <- predict(fit,newdata=trainingDat)
+trainingDat.error <- dim(trainingDat)[1] - sum(trainingDat$classe == trainingDat.pred)
+trainingDat.error
+```
+
+Predict the testing data using the trained random forest model and assigning the prediction to testingDat$pred
+
+```{r}
+testingDat.pred <- predict(fit,newdata=testingDat)
+testingDat.pred
+```
+
